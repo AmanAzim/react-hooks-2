@@ -12,7 +12,7 @@ const Search = React.memo(({ onLoadIngredients }) => {
         const timer = setTimeout(() => {
             //Comparing the old value with the current value of after 500 mil sec extracted by useRef. if they matches then it means user have not changed his entered value after 500 ms so we can send a request to db
             if (enteredFilter === inputRef.current.value) {
-
+                console.log('Loading ingredient - Search.js line:15')
                 const query = enteredFilter.length === 0 ? '' : `?orderBy="title"&equalTo="${enteredFilter}"`;
 
                 fetch('https://vue-axios-practise-2.firebaseio.com/ingredients.json' + query)
@@ -21,7 +21,7 @@ const Search = React.memo(({ onLoadIngredients }) => {
                   })
                   .then( resData => {
                       const loadedIngredients = [];
-                      console.log('resData',resData);
+
                       for (const key in resData) {
                           loadedIngredients.push({
                               id: key,

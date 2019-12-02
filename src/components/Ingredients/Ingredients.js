@@ -1,9 +1,10 @@
-import React, { useReducer, useState, useEffect, useCallback } from 'react';
+import React, { useReducer, useState, useEffect, useCallback, useMemo } from 'react';
 
 import IngredientForm from './IngredientForm';
 import Search from './Search';
 import IngredientList from './IngredientList';
 import ErrorModal from '../UI/ErrorModal';
+import useHttp from '../../customHooks/http';
 
                             //Current State
 const ingredientReducer = (currentIngredients, action) => {
@@ -13,96 +14,74 @@ const ingredientReducer = (currentIngredients, action) => {
         case 'ADD':
             return [...currentIngredients, action.ingredient];
         case 'DELETE':
-            return currentIngredients.finter( ing => ing.id !== action.id );
+            return currentIngredients.filter( ing => ing.id !== action.id );
         default:
             throw new Error('Should not get there !');
-    }
-};
-
-const httpReducer = (currentHttpState, action) => {
-    switch (action.type) {
-        case 'SEND':
-            return {
-                isLoading: true,
-                error: null,
-            };
-        case 'RESPONSE':
-            return {
-                ...currentHttpState,
-                isLoading: false,
-            };
-        case 'ERROR':
-            return {
-                isLoading: false,
-                error: action.errorMsg,
-            };
-        case 'CLR_ERR':
-            return {
-                ...currentHttpState,
-                error: null,
-            };
-        default:
-            throw new Error('Should not be reached !');
     }
 };
 
 function Ingredients() {
 
   const [ingredients, dispatch] = useReducer(ingredientReducer, []);
-  //const [ingredients, setIngredients] = useState([]);
-  const [httpState, dispatchHttp] = useReducer(httpReducer,{isLoading: false, error: null});
+  const { isLoading, error, data, sendRequest, extraData, reqIdentifier, clear } = useHttp();
 
-  const addIngredientHandler = ingredient => {
-      dispatchHttp({ type:'SEND' });
+  useEffect(() => {
+      if (!isLoading && !error && reqIdentifier === 'REMOVE_INGREDIENT') {
+          dispatch({ type: 'DELETE', id: extraData });
+      } else if (!isLoading && !error && reqIdentifier === 'ADD_INGEDIENT') {
+          console.log(data)
+          dispatch({ type: 'ADD', ingredient: { id: data.name, ...extraData } });
+      }
 
-      fetch('https://vue-axios-practise-2.firebaseio.com/ingredients.json', {
-          method: 'POST',
-          body: JSON.stringify(ingredient),
-          headers: { 'Content-Type': 'application/json' }
-      })
-      .then( res => {
-          return res.json();
-      })
-      .then( resData => {
-          /*
-           setIngredients((prevIngredients) => [
-              ...prevIngredients,
-              { id: resData.name, ...ingredient }
-            ]
-          );*/
-          dispatch({type:'ADD', ingredient: { id: resData.name, ...ingredient }});
-          dispatchHttp({ type:'RESPONSE' });
-      }).catch(err => dispatchHttp({ type:'ERROR', errorMsg: err.message }));
-  };
+  }, [data, extraData, reqIdentifier, error]);
 
-  const removeIngredientHandler = ingredientId => {
-      dispatchHttp({ type:'SEND' });
 
-      fetch(`https://vue-axios-practise-2.firebaseio.com/ingredients/${ingredientId}.json`, { method: 'DELETE' })
-      .then( res => {
-          return res.json();
-      })
-      .then( resData => {
-          //setIngredients((prevIngredients) => prevIngredients.filter( ing => ing.id !== ingredientId ));
-          dispatch({type:'ADD', id: ingredientId });
-          dispatchHttp({ type:'RESPONSE' });
-      })
-      .catch(err => dispatchHttp({ type:'ERROR', errorMsg: err.message }) );
-  };
+  const addIngredientHandler = useCallback(ingredient => {
+      sendRequest(
+          'https://vue-axios-practise-2.firebaseio.com/ingredients.json',
+          'POST',
+          JSON.stringify(ingredient),
+          ingredient,
+          'ADD_INGEDIENT',
+      );
+  }, []);
+
+
+  const removeIngredientHandler = useCallback(ingredientId => {
+        sendRequest(
+            `https://vue-axios-practise-2.firebaseio.com/ingredients/${ingredientId}.json`,
+            'DELETE',
+            null,
+            ingredientId,
+            'REMOVE_INGREDIENT',
+        );
+  }, [sendRequest]);
+
 
   const onLoadIngredients = useCallback(loadedIngredients => {
-      //setIngredients(loadedIngredients);
       dispatch({type:'SET', ingredients: loadedIngredients});
   }, []);
 
+
+  const IngredientListFunc = useMemo(() => {
+      return (
+          <IngredientList
+              isLoading={isLoading}
+              ingredients={ingredients}
+              onRemoveItem={(id) => removeIngredientHandler(id)}
+          />
+      );
+  }, [ingredients, removeIngredientHandler]);
+
+
   return (
     <div className="App">
-        {httpState.error && <ErrorModal onClose={() => dispatchHttp({ type:'CLR_ERR' })}>{httpState.error}</ErrorModal>}
-      <IngredientForm onAddIngredients={addIngredientHandler} isLoading={httpState.isLoading}/>
+        {error && <ErrorModal onClose={clear}>{error}</ErrorModal>}
+      <IngredientForm onAddIngredients={addIngredientHandler} isLoading={isLoading}/>
 
       <section>
         <Search onLoadIngredients={onLoadIngredients}/>
-        <IngredientList isLoading={httpState.isLoading} ingredients={ingredients} onRemoveItem={(id) => removeIngredientHandler(id)}/>
+        { IngredientListFunc }
       </section>
     </div>
   );
