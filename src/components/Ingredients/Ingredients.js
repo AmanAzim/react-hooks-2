@@ -5,13 +5,56 @@ import Search from './Search';
 import IngredientList from './IngredientList';
 import ErrorModal from '../UI/ErrorModal';
 
+                            //Current State
+const ingredientReducer = (currentIngredients, action) => {
+    switch (action.type) {
+        case 'SET':
+            return action.ingredients;
+        case 'ADD':
+            return [...currentIngredients, action.ingredient];
+        case 'DELETE':
+            return currentIngredients.finter( ing => ing.id !== action.id );
+        default:
+            throw new Error('Should not get there !');
+    }
+};
+
+const httpReducer = (currentHttpState, action) => {
+    switch (action.type) {
+        case 'SEND':
+            return {
+                isLoading: true,
+                error: null,
+            };
+        case 'RESPONSE':
+            return {
+                ...currentHttpState,
+                isLoading: false,
+            };
+        case 'ERROR':
+            return {
+                isLoading: false,
+                error: action.errorMsg,
+            };
+        case 'CLR_ERR':
+            return {
+                ...currentHttpState,
+                error: null,
+            };
+        default:
+            throw new Error('Should not be reached !');
+    }
+};
+
 function Ingredients() {
-  const [ingredients, setIngredients] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(undefined);
+
+  const [ingredients, dispatch] = useReducer(ingredientReducer, []);
+  //const [ingredients, setIngredients] = useState([]);
+  const [httpState, dispatchHttp] = useReducer(httpReducer,{isLoading: false, error: null});
 
   const addIngredientHandler = ingredient => {
-      setIsLoading(true);
+      dispatchHttp({ type:'SEND' });
+
       fetch('https://vue-axios-practise-2.firebaseio.com/ingredients.json', {
           method: 'POST',
           body: JSON.stringify(ingredient),
@@ -21,39 +64,45 @@ function Ingredients() {
           return res.json();
       })
       .then( resData => {
+          /*
            setIngredients((prevIngredients) => [
               ...prevIngredients,
               { id: resData.name, ...ingredient }
             ]
-          );
-          setIsLoading(false);
-      }).catch(err => setError(err.message));
+          );*/
+          dispatch({type:'ADD', ingredient: { id: resData.name, ...ingredient }});
+          dispatchHttp({ type:'RESPONSE' });
+      }).catch(err => dispatchHttp({ type:'ERROR', errorMsg: err.message }));
   };
 
   const removeIngredientHandler = ingredientId => {
-      setIsLoading(true);
+      dispatchHttp({ type:'SEND' });
+
       fetch(`https://vue-axios-practise-2.firebaseio.com/ingredients/${ingredientId}.json`, { method: 'DELETE' })
       .then( res => {
           return res.json();
       })
       .then( resData => {
-          setIngredients((prevIngredients) => prevIngredients.filter( ing => ing.id !== ingredientId ));
-          setIsLoading(false);
-      }).catch(err => setError(err.message));
+          //setIngredients((prevIngredients) => prevIngredients.filter( ing => ing.id !== ingredientId ));
+          dispatch({type:'ADD', id: ingredientId });
+          dispatchHttp({ type:'RESPONSE' });
+      })
+      .catch(err => dispatchHttp({ type:'ERROR', errorMsg: err.message }) );
   };
 
   const onLoadIngredients = useCallback(loadedIngredients => {
-      setIngredients(loadedIngredients);
+      //setIngredients(loadedIngredients);
+      dispatch({type:'SET', ingredients: loadedIngredients});
   }, []);
 
   return (
     <div className="App">
-        {error && <ErrorModal onClose={() => setError(undefined)}>{error}</ErrorModal>}
-      <IngredientForm onAddIngredients={addIngredientHandler} isLoading={isLoading}/>
+        {httpState.error && <ErrorModal onClose={() => dispatchHttp({ type:'CLR_ERR' })}>{httpState.error}</ErrorModal>}
+      <IngredientForm onAddIngredients={addIngredientHandler} isLoading={httpState.isLoading}/>
 
       <section>
         <Search onLoadIngredients={onLoadIngredients}/>
-        <IngredientList isLoading={isLoading} ingredients={ingredients} onRemoveItem={(id) => removeIngredientHandler(id)}/>
+        <IngredientList isLoading={httpState.isLoading} ingredients={ingredients} onRemoveItem={(id) => removeIngredientHandler(id)}/>
       </section>
     </div>
   );
